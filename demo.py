@@ -27,7 +27,11 @@ def run_demo():
     try:
         # Import system components
         from src.vector_db import VectorDBManager
-        from src.rag_tools import create_rag_tool, create_document_analysis_tool, create_citation_validator_tool
+        from src.rag_tools import (
+            RegulatoryRAGTool,
+            DocumentAnalysisTool,
+            CitationValidatorTool
+        )
         from src.agents import RegulatoryAgentFactory
         
         print("✅ System components imported successfully")
@@ -36,18 +40,14 @@ def run_demo():
         vector_db = VectorDBManager()
         print("✅ Vector database initialized")
         
-        # Create tool functions
-        rag_tool_func = create_rag_tool(vector_db)
-        document_analyzer_func = create_document_analysis_tool(vector_db)
-        citation_validator_func = create_citation_validator_tool()
+        # Create tool instances
+        rag_tool = RegulatoryRAGTool(vector_db)
+        document_analyzer = DocumentAnalysisTool(vector_db)
+        citation_validator = CitationValidatorTool()
         print("✅ Tools created successfully")
         
         # Create agent factory
-        agent_factory = RegulatoryAgentFactory(
-            rag_tool_func,
-            document_analyzer_func,
-            citation_validator_func
-        )
+        agent_factory = RegulatoryAgentFactory(vector_db)
         print("✅ Agent factory created")
         
         # Create agents
@@ -58,17 +58,17 @@ def run_demo():
         
         # Test RAG tool
         print("\n🔍 Testing RAG tool with sample query...")
-        test_result = rag_tool_func("What are FDI regulations?", "fema", 2)
+        test_result = rag_tool._run("What are FDI regulations?", "fema", 2)
         print("✅ RAG tool executed (no documents in DB yet, so no results expected)")
         
         # Test document analyzer
         print("\n📄 Testing document analyzer...")
-        doc_result = document_analyzer_func("Sample contract content for testing", "general")
+        doc_result = document_analyzer._run("Sample contract content for testing", "general")
         print("✅ Document analyzer executed")
         
         # Test citation validator
         print("\n📋 Testing citation validator...")
-        citation_result = citation_validator_func("RBI Circular No. 123, Page 45, Section 3.2")
+        citation_result = citation_validator._run("RBI Circular No. 123, Page 45, Section 3.2")
         print("✅ Citation validator executed")
         
         print("\n🎉 Demo completed successfully!")
