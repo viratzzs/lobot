@@ -1,0 +1,42 @@
+[project]
+name = "lobot"
+version = "0.1.0"
+description = "AI-powered regulatory compliance advisory system for Indian financial and corporate sectors"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "crewai[tools]>=0.148.0",
+    "chromadb>=0.4.0",
+    "openai>=1.0.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
+    "pymupdf>=1.23.0",
+    "pdfplumber>=0.9.0",
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "docx2txt>=0.8",
+    "sentence-transformers>=2.2.0",
+    "langchain>=0.1.0",
+    "langchain-openai>=0.1.0",
+    "langchain-chroma>=0.1.0",
+    "tiktoken>=0.5.0",
+    "rich>=13.0.0",
+    "typer>=0.9.0",
+    "tqdm>=4.65.0",
+    "colorama>=0.4.6",
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=4.9.0",
+    "markdown>=3.5.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1.0",
+    "python-dateutil>=2.8.0",
+    "pytz>=2023.3",
+    "regex>=2023.0.0",
+    "validators>=0.22.0",
+    "pillow>=10.0.0",
+    "chardet>=5.2.0",
+]
