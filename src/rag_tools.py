@@ -1,6 +1,7 @@
 """
 Custom RAG Tool for Regulatory Compliance
 Interfaces with vector database and ensures proper citations
+Enhanced with legal reasoning capabilities
 """
 
 from typing import List, Dict, Any, Optional, Callable
@@ -243,6 +244,97 @@ class CitationValidatorTool(BaseTool):
             return json.dumps(error_response)
 
 
+class LegalReasoningTool(BaseTool):
+    """
+    Tool for applying formal legal reasoning to regulatory scenarios
+    """
+    name: str = "legal_reasoning_analyzer"
+    description: str = (
+        "Apply formal legal reasoning to analyze regulatory scenarios. "
+        "Args: scenario (dict), analysis_type (str, optional)"
+    )
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Import here to avoid circular imports
+        from .legal_reasoning import LegalReasoningEngine, ComplianceWorkflowEngine
+        self.reasoning_engine = LegalReasoningEngine()
+        self.workflow_engine = ComplianceWorkflowEngine()
+        
+        # Set the name and description as instance attributes for CrewAI compatibility
+        self.name = "legal_reasoning_analyzer"
+        self.description = (
+            "Apply formal legal reasoning to analyze regulatory scenarios. "
+            "Args: scenario (dict), analysis_type (str, optional)"
+        )
+    
+    def _run(self, scenario: str, analysis_type: str = "basic") -> str:
+        """
+        Apply legal reasoning to analyze a regulatory scenario
+        """
+        try:
+            # Parse scenario if it's a JSON string
+            if isinstance(scenario, str):
+                try:
+                    scenario_dict = json.loads(scenario)
+                except json.JSONDecodeError:
+                    # If not JSON, treat as text description
+                    scenario_dict = {"description": scenario}
+            else:
+                scenario_dict = scenario
+            
+            if analysis_type == "comprehensive":
+                # Use comprehensive workflow engine
+                analysis_result = self.workflow_engine.comprehensive_compliance_check(scenario_dict)
+            else:
+                # Use basic reasoning engine
+                analysis_result = self.reasoning_engine.analyze_compliance(scenario_dict)
+            
+            # Format the response
+            response = {
+                "status": "success",
+                "analysis_type": analysis_type,
+                "scenario": scenario_dict.get("description", str(scenario_dict)[:100]),
+                "legal_analysis": analysis_result,
+                "summary": self._create_analysis_summary(analysis_result)
+            }
+            
+            return json.dumps(response, indent=2, default=str)
+            
+        except Exception as e:
+            error_response = {
+                "status": "error",
+                "message": f"Error in legal reasoning: {str(e)}",
+                "scenario": str(scenario)[:100],
+                "analysis_type": analysis_type
+            }
+            return json.dumps(error_response)
+    
+    def _create_analysis_summary(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a summary of the legal analysis"""
+        summary = {}
+        
+        # Basic reasoning engine results
+        if "facts" in analysis_result:
+            summary["identified_facts"] = len(analysis_result.get("facts", []))
+            summary["applicable_rules"] = len(analysis_result.get("applicable_rules", []))
+            summary["conflicts_found"] = len(analysis_result.get("conflicts", []))
+            summary["conclusions"] = len(analysis_result.get("conclusions", []))
+            summary["confidence_score"] = analysis_result.get("confidence_score", 0.0)
+        
+        # Comprehensive workflow results
+        if "compliance_score" in analysis_result:
+            summary["overall_compliance_score"] = analysis_result.get("compliance_score", 0.0)
+            
+            # Risk analysis summary
+            if "risk_assessment" in analysis_result:
+                risks = analysis_result["risk_assessment"].get("risks", [])
+                summary["total_risks"] = len(risks)
+                summary["high_risks"] = len([r for r in risks if r.get("severity") == "high"])
+        
+        return summary
+
+
 # Legacy dictionary functions for backward compatibility
 def create_rag_tool_dict(vector_db: VectorDBManager) -> Dict[str, Any]:
     """Create a RAG tool dictionary for CrewAI agents"""
@@ -441,4 +533,71 @@ def create_citation_validator_tool_dict() -> Dict[str, Any]:
         "name": "citation_validator",
         "description": "Validate and format citations for regulatory documents",
         "func": citation_validator
+    }
+
+
+def create_legal_reasoning_tool_dict() -> Dict[str, Any]:
+    """Create a legal reasoning tool dictionary for CrewAI agents"""
+    
+    def legal_reasoning_analyzer(scenario: str, analysis_type: str = "basic") -> str:
+        """
+        Apply formal legal reasoning to analyze regulatory scenarios
+        """
+        try:
+            # Import here to avoid circular imports
+            from .legal_reasoning import LegalReasoningEngine, ComplianceWorkflowEngine
+            
+            reasoning_engine = LegalReasoningEngine()
+            workflow_engine = ComplianceWorkflowEngine()
+            
+            # Parse scenario if it's a JSON string
+            if isinstance(scenario, str):
+                try:
+                    scenario_dict = json.loads(scenario)
+                except json.JSONDecodeError:
+                    # If not JSON, treat as text description
+                    scenario_dict = {"description": scenario}
+            else:
+                scenario_dict = scenario
+            
+            if analysis_type == "comprehensive":
+                # Use comprehensive workflow engine
+                analysis_result = workflow_engine.comprehensive_compliance_check(scenario_dict)
+            else:
+                # Use basic reasoning engine
+                analysis_result = reasoning_engine.analyze_compliance(scenario_dict)
+            
+            # Create summary
+            summary = {}
+            if "facts" in analysis_result:
+                summary["identified_facts"] = len(analysis_result.get("facts", []))
+                summary["applicable_rules"] = len(analysis_result.get("applicable_rules", []))
+                summary["conflicts_found"] = len(analysis_result.get("conflicts", []))
+                summary["conclusions"] = len(analysis_result.get("conclusions", []))
+                summary["confidence_score"] = analysis_result.get("confidence_score", 0.0)
+            
+            # Format the response
+            response = {
+                "status": "success",
+                "analysis_type": analysis_type,
+                "scenario": scenario_dict.get("description", str(scenario_dict)[:100]),
+                "legal_analysis": analysis_result,
+                "summary": summary
+            }
+            
+            return json.dumps(response, indent=2, default=str)
+            
+        except Exception as e:
+            error_response = {
+                "status": "error",
+                "message": f"Error in legal reasoning: {str(e)}",
+                "scenario": str(scenario)[:100],
+                "analysis_type": analysis_type
+            }
+            return json.dumps(error_response)
+    
+    return {
+        "name": "legal_reasoning_analyzer",
+        "description": "Apply formal legal reasoning to analyze regulatory scenarios",
+        "func": legal_reasoning_analyzer
     }

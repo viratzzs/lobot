@@ -337,3 +337,35 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def test_legal_reasoning_integration():
+    """Test function to verify legal reasoning integration"""
+    print("Testing Legal Reasoning Integration...")
+    
+    try:
+        # Test the legal reasoning tool directly
+        from src.rag_tools import LegalReasoningTool
+        reasoning_tool = LegalReasoningTool()
+        
+        # Test scenario
+        test_scenario = {
+            "description": "A foreign company wants to invest in an Indian IT company",
+            "details": "Investment amount is $50 million for 49% stake"
+        }
+        
+        result = reasoning_tool._run(json.dumps(test_scenario), "basic")
+        print("Legal Reasoning Tool Test Result:")
+        print(result)
+        
+        # Test agent with reasoning capability
+        system = RegulatoryComplianceSystem()
+        router_agent = system.agents['router']
+        
+        print(f"\nRouter agent tools: {[tool.__class__.__name__ for tool in router_agent.tools]}")
+        print("✅ Legal reasoning integration successful!")
+        
+    except Exception as e:
+        print(f"❌ Legal reasoning integration failed: {str(e)}")
+        import traceback
+        traceback.print_exc()

@@ -9,7 +9,8 @@ from .vector_db import VectorDBManager
 from .rag_tools import (
     RegulatoryRAGTool,
     DocumentAnalysisTool,
-    CitationValidatorTool
+    CitationValidatorTool,
+    LegalReasoningTool
 )
 
 
@@ -21,6 +22,7 @@ class RegulatoryAgentFactory:
         self.rag_tool = RegulatoryRAGTool(vector_db)
         self.document_analyzer = DocumentAnalysisTool(vector_db)
         self.citation_validator = CitationValidatorTool()
+        self.legal_reasoning_tool = LegalReasoningTool()
     
     def create_query_router(self) -> Agent:
         """Create the query routing agent"""
@@ -39,16 +41,19 @@ class RegulatoryAgentFactory:
             ),
             verbose=True,
             allow_delegation=True,
-            tools=[self.rag_tool, self.citation_validator],
+            tools=[self.rag_tool, self.citation_validator, self.legal_reasoning_tool],
             system_template=(
                 "You are a legal query router. For every query you receive:\n"
                 "1. Analyze the query to determine the primary regulatory domain\n"
                 "2. If the query spans multiple domains, identify ALL relevant domains\n"
-                "3. Route the query to the appropriate specialist agent(s)\n"
-                "4. Ensure the final response includes proper citations\n"
-                "5. NEVER provide answers without proper citations\n"
-                "6. If no relevant documents are found, clearly state this limitation\n"
-                "Available domains: RBI/FEMA, Companies Act, SEBI, Customs/Trade, General"
+                "3. Use the RAG tool to search for relevant documents\n"
+                "4. Apply legal reasoning tool for complex scenarios requiring formal analysis\n"
+                "5. Route the query to the appropriate specialist agent(s)\n"
+                "6. Ensure the final response includes proper citations\n"
+                "7. NEVER provide answers without proper citations\n"
+                "8. If no relevant documents are found, clearly state this limitation\n"
+                "Available domains: RBI/FEMA, Companies Act, SEBI, Customs/Trade, General\n"
+                "Use legal_reasoning_analyzer for scenarios requiring formal legal analysis"
             )
         )
     
@@ -70,17 +75,19 @@ class RegulatoryAgentFactory:
                 'You NEVER provide advice without proper citations from official sources.'
             ),
             verbose=True,
-            tools=[self.rag_tool, self.document_analyzer, self.citation_validator],
+            tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
             system_template=(
                 "You are an RBI and FEMA expert. For every query:\n"
                 "1. Search for relevant RBI circulars and FEMA provisions using the RAG tool\n"
-                "2. Provide specific, actionable guidance based on official sources\n"
-                "3. Include exact citations (circular number, date, section, paragraph)\n"
-                "4. Mention any recent updates or amendments\n"
-                "5. Highlight compliance deadlines and reporting requirements\n"
-                "6. If documents mention penalties, include specific penalty clauses\n"
-                "7. NEVER speculate or provide advice without proper citations\n"
-                "8. If information is not available in the database, clearly state this limitation"
+                "2. Apply legal reasoning for complex compliance scenarios\n"
+                "3. Provide specific, actionable guidance based on official sources\n"
+                "4. Include exact citations (circular number, date, section, paragraph)\n"
+                "5. Mention any recent updates or amendments\n"
+                "6. Highlight compliance deadlines and reporting requirements\n"
+                "7. If documents mention penalties, include specific penalty clauses\n"
+                "8. For complex scenarios, use legal_reasoning_analyzer tool\n"
+                "9. NEVER speculate or provide advice without proper citations\n"
+                "10. If information is not available in the database, clearly state this limitation"
             )
         )
     
@@ -102,7 +109,7 @@ class RegulatoryAgentFactory:
                 'practical implications of corporate law provisions.'
             ),
             verbose=True,
-            tools=[self.rag_tool, self.document_analyzer, self.citation_validator],
+            tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
             system_template=(
                 "You are a Companies Act expert. For every query:\n"
                 "1. Search for relevant provisions in Companies Act 2013 and related rules\n"
@@ -167,7 +174,7 @@ class RegulatoryAgentFactory:
                 'and FTP (Foreign Trade Policy) provisions.'
             ),
             verbose=True,
-            tools=[self.rag_tool, self.document_analyzer, self.citation_validator],
+            tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
             system_template=(
                 "You are a customs and trade expert. For every query:\n"
                 "1. Search for relevant customs notifications and trade policies\n"
@@ -198,7 +205,7 @@ class RegulatoryAgentFactory:
                 'requirements and suggest appropriate amendments.'
             ),
             verbose=True,
-            tools=[self.rag_tool, self.document_analyzer, self.citation_validator],
+            tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
             system_template=(
                 "You are a document compliance analyzer. For every document:\n"
                 "1. Analyze the document systematically for regulatory issues\n"
@@ -228,7 +235,7 @@ class RegulatoryAgentFactory:
                 'implementable. You never compromise on citation quality or accuracy.'
             ),
             verbose=True,
-            tools=[self.citation_validator],
+            tools=[self.citation_validator, self.legal_reasoning_tool],
             system_template=(
                 "You are the final advisory officer. For every response:\n"
                 "1. Synthesize all specialist inputs into a coherent response\n"
