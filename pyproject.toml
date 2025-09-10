@@ -41,4 +41,5 @@ dependencies = [
     "chardet>=5.2.0",
     "loguru>=0.7.3",
     "selenium>=4.35.0",
+    "faiss-cpu>=1.12.0",
 ]

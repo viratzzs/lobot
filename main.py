@@ -8,16 +8,15 @@ import sys
 import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from crewai import Crew, Process
+from crewai import Crew, Process, LLM
 from dotenv import load_dotenv
 
 # Add src to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-from src.vector_db import VectorDBManager, DocumentProcessor
+from src.faiss_db import VectorDBManager, DocumentProcessor
 from src.rag_tools import (
-    RegulatoryRAGTool, DocumentAnalysisTool, CitationValidatorTool,
-    create_rag_tool_dict, create_document_analysis_tool_dict, create_citation_validator_tool_dict
+    RegulatoryRAGTool, DocumentAnalysisTool, CitationValidatorTool
 )
 from src.agents import RegulatoryAgentFactory
 from src.tasks import RegulatoryTaskFactory, TaskOrchestrator
@@ -27,34 +26,40 @@ class RegulatoryComplianceSystem:
     """Main system orchestrating regulatory compliance queries"""
     
     def __init__(self):
-        # Load environment variables
         load_dotenv()
         
-        # Validate required environment variables
-        if not os.getenv("OPENAI_API_KEY"):
-            raise ValueError("OPENAI_API_KEY environment variable is required")
+        # Check for Azure OpenAI configuration
+        if not all([
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        ]):
+            raise ValueError(
+                "Azure OpenAI configuration required. Please set:\n"
+                "- AZURE_OPENAI_API_KEY\n"
+                "- AZURE_OPENAI_ENDPOINT\n"
+                "- AZURE_OPENAI_DEPLOYMENT_NAME"
+            )
         
-        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+        # Configure Azure OpenAI environment variables for CrewAI
+        os.environ["AZURE_OPENAI_API_KEY"] = os.getenv("AZURE_OPENAI_API_KEY")
+        os.environ["AZURE_OPENAI_ENDPOINT"] = os.getenv("AZURE_OPENAI_ENDPOINT")
+        os.environ["AZURE_OPENAI_API_VERSION"] = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
         
-        # Initialize vector database
         self.vector_db = VectorDBManager()
-        
-        # Initialize agent factory with vector database
         self.agent_factory = RegulatoryAgentFactory(self.vector_db)
         
-        # Initialize agents
         self.agents = self.agent_factory.get_all_agents()
         
         # Initialize task management
         self.task_factory = RegulatoryTaskFactory(self.agents)
         self.task_orchestrator = TaskOrchestrator(self.task_factory)
         
-        # System statistics
         self.query_count = 0
         self.session_start = datetime.now()
         
         print("✅ Regulatory Compliance System initialized successfully")
-        print(f"📊 Database stats: {self.vector_db.get_document_stats()}")
+        print(f"📊 Database stats: {self.vector_db.get_database_stats()}")
     
     def process_query(self, user_query: str, query_type: str = "auto") -> Dict[str, Any]:
         """Process a regulatory query through the multi-agent system"""
@@ -82,7 +87,7 @@ class RegulatoryComplianceSystem:
                 process=Process.sequential,
                 verbose=1,
                 memory=True,
-                planning=True
+                planning=False  # Disable planning to avoid Task Execution Planner issues
             )
             
             # Execute the crew
@@ -169,7 +174,7 @@ class RegulatoryComplianceSystem:
         return {
             "session_start": self.session_start.isoformat(),
             "queries_processed": self.query_count,
-            "database_stats": self.vector_db.get_document_stats(),
+            "database_stats": self.vector_db.get_database_stats(),
             "available_agents": list(self.agents.keys()),
             "system_status": "operational"
         }

@@ -1,204 +1,196 @@
 #!/usr/bin/env python3
 """
-Script to remove duplicate PDF files within a directory
-Uses file hashing to identify identical files and removes duplicates
+Simple script to remove duplicate and corrupt PDF files
+Usage: python remove_duplicates.py [directory] [options]
 """
 
 import os
-import hashlib
+import re
 from collections import defaultdict
 from loguru import logger
 
-def calculate_file_hash(filepath, chunk_size=8192):
-    """Calculate SHA-256 hash of a file"""
-    try:
-        hash_sha256 = hashlib.sha256()
-        with open(filepath, 'rb') as f:
-            while chunk := f.read(chunk_size):
-                hash_sha256.update(chunk)
-        return hash_sha256.hexdigest()
-    except Exception as e:
-        logger.error(f"Error calculating hash for {filepath}: {str(e)}")
-        return None
+# Configure simple logging
+logger.remove()
+logger.add(lambda msg: print(msg), format="{message}", level="INFO")
 
-def find_duplicate_pdfs_by_name(directory):
-    """Find duplicate PDF files by analyzing filename patterns"""
-    name_to_files = defaultdict(list)
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+
+def is_pdf_corrupt(filepath):
+    """Check if PDF is corrupt"""
+    if not PYMUPDF_AVAILABLE:
+        return False
+    
+    try:
+        doc = fitz.open(filepath)
+        if len(doc) == 0:
+            doc.close()
+            return True
+        doc[0].get_text()  # Try to read first page
+        doc.close()
+        return False
+    except:
+        return True
+
+def normalize_filename(filename):
+    """Remove (1), (2) etc. from filename"""
+    name, ext = os.path.splitext(filename)
+    normalized = re.sub(r'\(\d+\)$', '', name).strip()
+    return normalized + ext
+
+def find_duplicates_and_corrupt(directory, recursive=False, check_corruption=False):
+    """Find duplicate and corrupt PDFs"""
     pdf_files = []
     
-    # Get all PDF files in the directory
-    try:
+    # Get all PDF files
+    if recursive:
+        for root, dirs, files in os.walk(directory):
+            for filename in files:
+                if filename.lower().endswith('.pdf'):
+                    pdf_files.append(os.path.join(root, filename))
+    else:
         for filename in os.listdir(directory):
             if filename.lower().endswith('.pdf'):
                 filepath = os.path.join(directory, filename)
                 if os.path.isfile(filepath):
                     pdf_files.append(filepath)
-    except Exception as e:
-        logger.error(f"Error listing directory {directory}: {str(e)}")
-        return {}
     
-    logger.info(f"Found {len(pdf_files)} PDF files in {directory}")
+    print(f"Found {len(pdf_files)} PDF files")
     
-    # Group files by base name (removing duplicate indicators)
+    # Find duplicates
+    name_groups = defaultdict(list)
     for filepath in pdf_files:
         filename = os.path.basename(filepath)
-        
-        # Remove common duplicate indicators like (1), (2), etc.
-        base_name = filename
-        
-        # Remove patterns like (1), (2), (3) etc. at the end before .pdf
-        import re
-        base_name = re.sub(r'\(\d+\)\.PDF$', '.PDF', base_name, flags=re.IGNORECASE)
-        base_name = re.sub(r'\(\d+\)\.pdf$', '.pdf', base_name, flags=re.IGNORECASE)
-        
-        name_to_files[base_name].append(filepath)
+        normalized_name = normalize_filename(filename)
+        name_groups[normalized_name].append(filepath)
     
-    # Find duplicates (base names with more than one file)
-    duplicates = {base_name: files for base_name, files in name_to_files.items() if len(files) > 1}
+    duplicates = {name: files for name, files in name_groups.items() if len(files) > 1}
     
-    return duplicates
+    # Find corrupt files
+    corrupt_files = []
+    if check_corruption and PYMUPDF_AVAILABLE:
+        print("Checking for corrupt files...")
+        for filepath in pdf_files:
+            if is_pdf_corrupt(filepath):
+                corrupt_files.append(filepath)
+    elif check_corruption:
+        print("PyMuPDF not available - install with: pip install PyMuPDF")
+    
+    return duplicates, corrupt_files
 
-def remove_duplicates(duplicates, keep_strategy='original'):
-    """
-    Remove duplicate files based on strategy
-    
-    Args:
-        duplicates: Dictionary of base_name -> list of file paths
-        keep_strategy: 'original', 'first', 'last', 'shortest_name', 'longest_name'
-    """
+def remove_files(duplicates, corrupt_files, keep_strategy='original'):
+    """Remove duplicate and corrupt files"""
     total_removed = 0
-    total_space_saved = 0
+    total_size = 0
     
-    for base_name, file_list in duplicates.items():
-        logger.info(f"Found {len(file_list)} duplicate files for: {base_name}")
-        
-        # Sort files based on strategy to determine which to keep
+    # Remove duplicates
+    for name, files in duplicates.items():
         if keep_strategy == 'original':
-            # Keep the file without (1), (2) etc. suffix (the original)
-            original_files = [f for f in file_list if not any(f.endswith(f'({i}).pdf') or f.endswith(f'({i}).PDF') for i in range(1, 20))]
-            if original_files:
-                files_to_keep = [original_files[0]]
-                files_to_remove = [f for f in file_list if f not in files_to_keep]
-            else:
-                # If no original found, keep first
-                files_to_keep = [file_list[0]]
-                files_to_remove = file_list[1:]
-        elif keep_strategy == 'first':
-            files_to_keep = [file_list[0]]
-            files_to_remove = file_list[1:]
-        elif keep_strategy == 'last':
-            files_to_keep = [file_list[-1]]
-            files_to_remove = file_list[:-1]
-        elif keep_strategy == 'shortest_name':
-            sorted_files = sorted(file_list, key=lambda x: len(os.path.basename(x)))
-            files_to_keep = [sorted_files[0]]
-            files_to_remove = sorted_files[1:]
-        elif keep_strategy == 'longest_name':
-            sorted_files = sorted(file_list, key=lambda x: len(os.path.basename(x)), reverse=True)
-            files_to_keep = [sorted_files[0]]
-            files_to_remove = sorted_files[1:]
+            # Keep file without (1), (2) suffix
+            original = [f for f in files if normalize_filename(os.path.basename(f)) == os.path.basename(f)]
+            to_keep = original[0] if original else files[0]
         else:
-            files_to_keep = [file_list[0]]
-            files_to_remove = file_list[1:]
+            to_keep = files[0]
         
-        # Log which file we're keeping
-        logger.info(f"Keeping: {os.path.basename(files_to_keep[0])}")
+        to_remove = [f for f in files if f != to_keep]
         
-        # Remove duplicate files
-        for filepath in files_to_remove:
+        for filepath in to_remove:
             try:
-                file_size = os.path.getsize(filepath)
+                size = os.path.getsize(filepath)
                 os.remove(filepath)
                 total_removed += 1
-                total_space_saved += file_size
-                logger.info(f"Removed: {os.path.basename(filepath)} ({file_size:,} bytes)")
+                total_size += size
+                print(f"Removed duplicate: {os.path.basename(filepath)}")
             except Exception as e:
-                logger.error(f"Error removing {filepath}: {str(e)}")
+                print(f"Error removing {filepath}: {e}")
     
-    return total_removed, total_space_saved
-
-def format_size(size_bytes):
-    """Format file size in human readable format"""
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} TB"
-
-def remove_duplicates_from_directory(directory, keep_strategy='first', dry_run=False):
-    """
-    Main function to remove duplicates from a directory
-    
-    Args:
-        directory: Path to directory to clean
-        keep_strategy: Which file to keep when duplicates found
-        dry_run: If True, only show what would be removed without actually removing
-    """
-    if not os.path.exists(directory):
-        logger.error(f"Directory does not exist: {directory}")
-        return
-    
-    if not os.path.isdir(directory):
-        logger.error(f"Path is not a directory: {directory}")
-        return
-    
-    logger.info(f"{'DRY RUN: ' if dry_run else ''}Scanning for duplicate PDFs in: {directory}")
-    logger.info(f"Keep strategy: {keep_strategy}")
-    
-    # Find duplicates using filename patterns
-    duplicates = find_duplicate_pdfs_by_name(directory)
-    
-    if not duplicates:
-        logger.success("No duplicate PDF files found!")
-        return
-    
-    # Count total duplicates
-    total_duplicate_files = sum(len(files) - 1 for files in duplicates.values())
-    logger.warning(f"Found {len(duplicates)} sets of duplicates involving {total_duplicate_files} files")
-    
-    # Show duplicate sets
-    for i, (base_name, file_list) in enumerate(duplicates.items(), 1):
-        logger.info(f"\nDuplicate set {i} (base name: {base_name}):")
-        for filepath in file_list:
+    # Remove corrupt files
+    for filepath in corrupt_files:
+        try:
             size = os.path.getsize(filepath)
-            logger.info(f"  - {os.path.basename(filepath)} ({format_size(size)})")
+            os.remove(filepath)
+            total_removed += 1
+            total_size += size
+            print(f"Removed corrupt: {os.path.basename(filepath)}")
+        except Exception as e:
+            print(f"Error removing {filepath}: {e}")
+    
+    return total_removed, total_size
+
+def clean_pdfs(directory, recursive=False, check_corruption=False, dry_run=False):
+    """Main function to clean PDFs"""
+    if not os.path.exists(directory):
+        print(f"Directory does not exist: {directory}")
+        return
+    
+    print(f"Scanning: {directory}")
+    if recursive:
+        print("Recursive scan enabled")
+    if check_corruption:
+        print("Corruption check enabled")
+    
+    # Find problems
+    duplicates, corrupt_files = find_duplicates_and_corrupt(directory, recursive, check_corruption)
+    
+    # Report findings
+    duplicate_count = sum(len(files) - 1 for files in duplicates.values())
+    corrupt_count = len(corrupt_files)
+    
+    if duplicate_count == 0 and corrupt_count == 0:
+        print("No issues found!")
+        return
+    
+    print(f"\nFound:")
+    if duplicate_count > 0:
+        print(f"  {duplicate_count} duplicate files")
+    if corrupt_count > 0:
+        print(f"  {corrupt_count} corrupt files")
     
     if dry_run:
-        logger.info(f"\nDRY RUN: Would remove {total_duplicate_files} duplicate files")
+        print(f"\nDRY RUN: Would remove {duplicate_count + corrupt_count} files")
         return
     
     # Confirm removal
     try:
-        confirm = input(f"\nRemove {total_duplicate_files} duplicate files? (y/N): ").strip().lower()
-        if confirm != 'y':
-            logger.info("Operation cancelled")
+        confirm = input(f"\nRemove {duplicate_count + corrupt_count} files? (y/N): ")
+        if confirm.lower() != 'y':
+            print("Cancelled")
             return
     except KeyboardInterrupt:
-        logger.info("\nOperation cancelled")
+        print("\nCancelled")
         return
     
-    # Remove duplicates
-    logger.info("Removing duplicate files...")
-    removed_count, space_saved = remove_duplicates(duplicates, keep_strategy)
-    
-    logger.success(f"Successfully removed {removed_count} duplicate files")
-    logger.success(f"Space saved: {format_size(space_saved)}")
+    # Remove files
+    removed, size_saved = remove_files(duplicates, corrupt_files)
+    mb_saved = size_saved / (1024 * 1024)
+    print(f"\nRemoved {removed} files ({mb_saved:.1f} MB saved)")
 
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Remove duplicate PDF files from a directory")
-    parser.add_argument("directory", nargs="?", default="sc", 
-                       help="Directory to scan for duplicates (default: sc)")
-    parser.add_argument("--strategy", choices=['original', 'first', 'last', 'shortest_name', 'longest_name'],
-                       default='original', help="Which file to keep when duplicates found (default: original)")
-    parser.add_argument("--dry-run", action="store_true", 
-                       help="Show what would be removed without actually removing")
+    parser = argparse.ArgumentParser(description="Remove duplicate and corrupt PDF files")
+    parser.add_argument("directory", nargs="?", default=".", 
+                    help="Directory to clean (default: current)")
+    parser.add_argument("--recursive", "-r", action="store_true",
+                    help="Scan subdirectories")
+    parser.add_argument("--check-corruption", "-c", action="store_true",
+                    help="Also check for corrupt PDFs")
+    parser.add_argument("--dry-run", "-d", action="store_true",
+                    help="Show what would be removed")
     
     args = parser.parse_args()
     
-    # Get the directory path relative to script location
-    script_dir = os.path.dirname(__file__)
-    target_dir = os.path.join(script_dir, args.directory)
+    # Get target directory
+    if args.directory == ".":
+        target_dir = os.getcwd()
+    elif os.path.isabs(args.directory):
+        target_dir = args.directory
+    else:
+        script_dir = os.path.dirname(__file__)
+        project_root = os.path.dirname(os.path.dirname(script_dir))  # Go up from src/scraping/ to project root
+        target_dir = os.path.join(project_root, args.directory)
     
-    remove_duplicates_from_directory(target_dir, args.strategy, args.dry_run)
+    clean_pdfs(target_dir, args.recursive, args.check_corruption, args.dry_run)

@@ -3,15 +3,20 @@ Specialized Agents for Regulatory Compliance System
 Each agent is an expert in specific regulatory domains
 """
 
-from crewai import Agent
+import os
+from crewai import Agent, LLM
 from typing import List, Dict, Any, Callable
-from .vector_db import VectorDBManager
+from dotenv import load_dotenv
+from .faiss_db import VectorDBManager
 from .rag_tools import (
     RegulatoryRAGTool,
     DocumentAnalysisTool,
     CitationValidatorTool,
     LegalReasoningTool
 )
+
+# Load environment variables
+load_dotenv()
 
 
 class RegulatoryAgentFactory:
@@ -23,6 +28,14 @@ class RegulatoryAgentFactory:
         self.document_analyzer = DocumentAnalysisTool(vector_db)
         self.citation_validator = CitationValidatorTool()
         self.legal_reasoning_tool = LegalReasoningTool()
+        
+        # Configure Azure OpenAI LLM
+        self.llm = LLM(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            model=f"azure/{os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')}",
+            base_url=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+        )
     
     def create_query_router(self) -> Agent:
         """Create the query routing agent"""
@@ -42,6 +55,8 @@ class RegulatoryAgentFactory:
             verbose=True,
             allow_delegation=True,
             tools=[self.rag_tool, self.citation_validator, self.legal_reasoning_tool],
+            llm=self.llm,
+            output_log_file=True,
             system_template=(
                 "You are a legal query router. For every query you receive:\n"
                 "1. Analyze the query to determine the primary regulatory domain\n"
@@ -74,8 +89,9 @@ class RegulatoryAgentFactory:
                 'multinational corporations and banks on complex regulatory matters. '
                 'You NEVER provide advice without proper citations from official sources.'
             ),
-            verbose=True,
+            verbose=True, output_log_file=True,
             tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
+            llm=self.llm,
             system_template=(
                 "You are an RBI and FEMA expert. For every query:\n"
                 "1. Search for relevant RBI circulars and FEMA provisions using the RAG tool\n"
@@ -108,8 +124,9 @@ class RegulatoryAgentFactory:
                 'amendments. You have appeared before Company Law Tribunals and understand '
                 'practical implications of corporate law provisions.'
             ),
-            verbose=True,
+            verbose=True, output_log_file=True,
             tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
+            llm=self.llm,
             system_template=(
                 "You are a Companies Act expert. For every query:\n"
                 "1. Search for relevant provisions in Companies Act 2013 and related rules\n"
@@ -141,8 +158,9 @@ class RegulatoryAgentFactory:
                 'advisory regulations. You have worked on IPOs, rights issues, and regulatory '
                 'filings with SEBI.'
             ),
-            verbose=True,
+            verbose=True, output_log_file=True,
             tools=[self.rag_tool, self.document_analyzer, self.citation_validator],
+            llm=self.llm,
             system_template=(
                 "You are a SEBI and securities law expert. For every query:\n"
                 "1. Search for relevant SEBI regulations and circulars\n"
@@ -173,8 +191,9 @@ class RegulatoryAgentFactory:
                 'matters. You are well-versed in customs tariff, GST on imports, export incentives, '
                 'and FTP (Foreign Trade Policy) provisions.'
             ),
-            verbose=True,
+            verbose=True, output_log_file=True,
             tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
+            llm=self.llm,
             system_template=(
                 "You are a customs and trade expert. For every query:\n"
                 "1. Search for relevant customs notifications and trade policies\n"
@@ -204,8 +223,9 @@ class RegulatoryAgentFactory:
                 'regulations. You can quickly identify clauses that may violate regulatory '
                 'requirements and suggest appropriate amendments.'
             ),
-            verbose=True,
+            verbose=True, output_log_file=True,
             tools=[self.rag_tool, self.document_analyzer, self.citation_validator, self.legal_reasoning_tool],
+            llm=self.llm,
             system_template=(
                 "You are a document compliance analyzer. For every document:\n"
                 "1. Analyze the document systematically for regulatory issues\n"
@@ -234,8 +254,9 @@ class RegulatoryAgentFactory:
                 'advice. You ensure all recommendations are properly cited and practically '
                 'implementable. You never compromise on citation quality or accuracy.'
             ),
-            verbose=True,
+            verbose=True, output_log_file=True,
             tools=[self.citation_validator, self.legal_reasoning_tool],
+            llm=self.llm,
             system_template=(
                 "You are the final advisory officer. For every response:\n"
                 "1. Synthesize all specialist inputs into a coherent response\n"

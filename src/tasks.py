@@ -1,5 +1,4 @@
 """
-Task Management System for Regulatory Compliance
 Defines tasks that orchestrate the multi-agent workflow
 """
 
@@ -60,7 +59,7 @@ class RegulatoryTaskFactory:
             'document_analyzer': self.agents['document_analyzer']
         }
         
-        specialist_agent = agent_map.get(domain, self.agents['rbi_fema'])
+        specialist_agent = agent_map.get(domain, self.agents[domain])
         
         return Task(
             description=(
@@ -201,11 +200,10 @@ class RegulatoryTaskFactory:
             ]
         
         elif query_type == "multi_domain":
-            # For complex queries spanning multiple domains
             return self.create_multi_domain_task(user_query, ["rbi_fema", "companies_act"])
         
         else:
-            # Standard single-domain query
+            # single domain
             return [
                 self.create_query_routing_task(user_query),
                 self.create_specialist_analysis_task("rbi_fema", user_query),
@@ -214,8 +212,6 @@ class RegulatoryTaskFactory:
 
 
 class TaskOrchestrator:
-    """Orchestrates task execution and manages dependencies"""
-    
     def __init__(self, task_factory: RegulatoryTaskFactory):
         self.task_factory = task_factory
     
@@ -223,11 +219,9 @@ class TaskOrchestrator:
         """Determine the type of query to create appropriate workflow"""
         query_lower = user_query.lower()
         
-        # Check if it's a document analysis request
         if any(term in query_lower for term in ["analyze", "review", "document", "agreement", "contract"]):
             return "document_analysis"
         
-        # Check if it spans multiple domains
         domain_count = 0
         domains = ["rbi", "fema", "companies", "sebi", "customs", "trade"]
         for domain in domains:
@@ -240,7 +234,6 @@ class TaskOrchestrator:
         return "general"
     
     def create_workflow(self, user_query: str) -> List[Task]:
-        """Create appropriate workflow for the query"""
         query_type = self.determine_query_type(user_query)
         return self.task_factory.create_workflow_for_query(user_query, query_type)
     

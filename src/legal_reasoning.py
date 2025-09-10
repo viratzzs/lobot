@@ -1,5 +1,5 @@
 """
-Legal Reasoning Engine for Enhanced Compliance Analysis
+Legal Reasoning Engine for Enhanced Analysis
 """
 
 from typing import List, Dict, Any, Optional, Set

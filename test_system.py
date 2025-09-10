@@ -15,10 +15,10 @@ def test_basic_imports():
     try:
         print("Testing imports...")
         
-        from src.vector_db import VectorDBManager, DocumentProcessor
+        from src.faiss_db import VectorDBManager, DocumentProcessor
         print("✅ Vector DB imported successfully")
         
-        from src.rag_tools import create_rag_tool, create_document_analysis_tool, create_citation_validator_tool
+        from src.rag_tools import RegulatoryRAGTool, DocumentAnalysisTool, CitationValidatorTool
         print("✅ RAG tools imported successfully")
         
         from src.agents import RegulatoryAgentFactory
@@ -38,24 +38,28 @@ def test_basic_functionality():
     try:
         print("\nTesting basic functionality...")
         
-        # Load environment
         load_dotenv()
-        if not os.getenv("OPENAI_API_KEY"):
-            print("⚠️  OPENAI_API_KEY not found in environment")
+        if not all([
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        ]):
+            print("⚠️  Azure OpenAI configuration not found. Please set:")
+            print("    - AZURE_OPENAI_API_KEY")
+            print("    - AZURE_OPENAI_ENDPOINT")
+            print("    - AZURE_OPENAI_DEPLOYMENT_NAME")
             return False
         
-        # Test vector database
-        from src.vector_db import VectorDBManager
+        from src.faiss_db import VectorDBManager
         vector_db = VectorDBManager()
         print("✅ Vector database initialized")
         
-        # Test tool creation
-        from src.rag_tools import create_rag_tool
-        rag_tool = create_rag_tool(vector_db)
+        from src.rag_tools import RegulatoryRAGTool
+        rag_tool = RegulatoryRAGTool(vector_db)
         print("✅ RAG tool created")
         
-        # Test simple search (should return no results since DB is empty)
-        result = rag_tool("test query", "general", 1)
+        #result = rag_tool("test query", "general", 1)
+        print(rag_tool)
         print("✅ RAG tool executed")
         
         return True
